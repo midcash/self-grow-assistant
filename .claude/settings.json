@@ -1,0 +1,27 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "deny": [
+      "*.env",
+      "*.pem",
+      "*.key",
+      "Secrets.*",
+      "Credentials.*"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"[HARNESS] File modified at $(date '+%H:%M:%S')\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+# ── Secrets ──
+agent-config.yaml
+
+# ── Python ──
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# ── Node ──
+frontend/node_modules/
+frontend/dist/
+
+# ── User Data ──
+data/
+static/
+
+# ── IDE ──
+.vscode/
+.idea/
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Claude Code ──
+.claude/settings.local.json
+
+# ── Misc ──
+*.log
+.pytest_cache/

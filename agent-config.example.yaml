@@ -1,0 +1,61 @@
+# 自我成长智能体配置文件 (示例)
+# 复制为 agent-config.yaml 并填入你的 API Key:
+#   cp agent-config.example.yaml agent-config.yaml
+
+agent:
+  name: "self-grow-agent"
+  cron: "*/20 * * * *"
+
+plugins:
+  llm:
+    default: "deepseek"
+    deepseek:
+      api_base: "https://api.deepseek.com"
+      api_key: "sk-your-deepseek-api-key"
+      model: "deepseek-chat"
+      max_tokens: 4096
+    qwen:
+      api_key: "sk-your-qwen-api-key"
+      model: "qwen-plus"
+
+  tts:
+    default: "qwen"
+    fallback: "edge"
+    qwen:
+      api_key: "sk-your-qwen-api-key"
+      model: "qwen3-tts-flash"
+      voice: "Cherry"
+    edge:
+      voice: "zh-CN-XiaoxiaoNeural"
+
+  priority:
+    engine: "weighted"
+    urgency_lambda: 0.15
+    long_task_factor: 2.0
+    algorithm_weight: 0.6
+    llm_weight: 0.4
+    default_importance: 8
+    alert_threshold: 0.4
+
+  motivation:
+    alert_threshold: 0.4
+    urgent_threshold: 0.7
+    max_reminders: 3
+
+  notify:
+    default: "voice"
+    fallback: "toast"
+
+live2d:
+  enabled: false
+
+mcp_servers:
+  - name: "modular-rag"
+    transport: "stdio"
+    command: "/path/to/python"
+    args: ["/path/to/MODULAR-RAG-MCP-SERVER/main.py"]
+
+memory:
+  hot_max_tokens: 4096
+  warm_db: "data/self-grow.db"
+  cold_path: "data/agent-memory/"

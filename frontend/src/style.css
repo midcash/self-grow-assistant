@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+
+/* ── Warm Cream Color Scheme (inspired by OpenHanako new-warm-paper) ── */
+:root {
+  --color-bg:       #F5EFE4;  /* warm paper background */
+  --color-card:     #FBF7EE;  /* elevated surfaces */
+  --color-sidebar:  #EFE8DB;  /* sidebar slightly darker */
+  --color-text:     #2A2622;  /* primary text — dark ink */
+  --color-text-light: #4A433C; /* secondary text */
+  --color-text-muted: #6B6158; /* tertiary text */
+  --color-border:   #D8CFBE;  /* hairline borders */
+  --color-accent:   #D4864B;  /* warm amber accent */
+  --color-accent-hover: #B8703A;
+  --color-primary:  #D4864B;
+  --color-primary-light: #FDF0E4;
+  --color-success:  #4A6B4A;
+  --color-danger:   #B8403C;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
