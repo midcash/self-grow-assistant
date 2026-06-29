@@ -211,6 +211,117 @@ async def agent_knowledge():
         return ok({"connected": False, "message": str(e)[:200]})
 
 
+# === Agent 可观测性 (Trace + Metrics) ===
+
+@router.get("/traces")
+async def agent_traces(
+    limit: int = 20,
+    agent_name: str = "",
+    date: str = "",
+    success: str = "",
+):
+    """编排 Trace 列表"""
+    try:
+        from backend.database import SessionLocal
+        from backend.models import AgentTrace
+        from datetime import date as date_type, timedelta
+
+        db = SessionLocal()
+        try:
+            q = db.query(AgentTrace)
+
+            if agent_name:
+                q = q.filter(AgentTrace.agent_name == agent_name)
+            if date:
+                d = date_type.fromisoformat(date)
+                q = q.filter(AgentTrace.created_at >= d, AgentTrace.created_at < d + timedelta(days=1))
+            if success == "true":
+                q = q.filter(AgentTrace.success == True)
+            elif success == "false":
+                q = q.filter(AgentTrace.success == False)
+
+            # 按 orchestration_id 分组，取每组最新的 span 作为摘要
+            spans = q.order_by(AgentTrace.created_at.desc()).limit(limit * 20).all()
+
+            # 按 orchestration_id 去重聚合
+            orch_map: dict[str, dict] = {}
+            for s in spans:
+                oid = s.orchestration_id
+                if oid not in orch_map:
+                    orch_map[oid] = {
+                        "orchestration_id": oid,
+                        "intent": s.objective if s.span_type == "plan" else "",
+                        "workers_used": [],
+                        "total_latency_ms": 0,
+                        "success": True,
+                        "created_at": s.created_at.isoformat() if s.created_at else "",
+                        "reply_preview": "",
+                    }
+                if s.span_type == "plan":
+                    orch_map[oid]["intent"] = s.objective
+                elif s.span_type == "worker_execute":
+                    if s.agent_name not in orch_map[oid]["workers_used"]:
+                        orch_map[oid]["workers_used"].append(s.agent_name)
+                    orch_map[oid]["total_latency_ms"] += s.latency_ms
+                elif s.span_type == "synthesis":
+                    orch_map[oid]["reply_preview"] = s.output_summary[:80]
+                if not s.success:
+                    orch_map[oid]["success"] = False
+
+            result = sorted(orch_map.values(), key=lambda x: x["created_at"], reverse=True)[:limit]
+            return ok(result)
+        finally:
+            db.close()
+    except Exception as e:
+        return ok([])
+
+
+@router.get("/traces/{orchestration_id}")
+async def agent_trace_detail(orchestration_id: str):
+    """编排 Trace 完整 span 树"""
+    try:
+        from backend.database import SessionLocal
+        from backend.models import AgentTrace
+
+        db = SessionLocal()
+        try:
+            spans = db.query(AgentTrace).filter(
+                AgentTrace.orchestration_id == orchestration_id
+            ).order_by(AgentTrace.id).all()
+
+            return ok([{
+                "id": str(s.id),
+                "orchestration_id": s.orchestration_id,
+                "span_type": s.span_type,
+                "agent_name": s.agent_name,
+                "parent_span_id": str(s.parent_span_id) if s.parent_span_id else None,
+                "objective": s.objective,
+                "input_summary": s.input_summary,
+                "output_summary": s.output_summary,
+                "latency_ms": s.latency_ms,
+                "success": s.success,
+                "error_message": s.error_message,
+                "metadata_json": s.metadata_json,
+                "created_at": s.created_at.isoformat() if s.created_at else "",
+            } for s in spans])
+        finally:
+            db.close()
+    except Exception as e:
+        return ok([])
+
+
+@router.get("/metrics")
+async def agent_metrics(days: int = 7, agent_name: str = ""):
+    """Agent 指标聚合"""
+    try:
+        from backend.agent.observability.metrics import MetricsAggregator
+        agg = MetricsAggregator()
+        data = agg.get_metrics(days=days, agent_name=agent_name if agent_name else None)
+        return ok(data)
+    except Exception as e:
+        return ok([])
+
+
 # === 对话 ===
 
 @router.post("/chat")

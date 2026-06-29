@@ -123,3 +123,73 @@ export interface KnowledgeStatus {
 export function getKnowledge(): Promise<KnowledgeStatus> {
   return get('/agent/knowledge')
 }
+
+// === Agent 可观测性 (Trace + Metrics) ===
+
+export interface OrchestrationSummary {
+  orchestration_id: string
+  intent: string
+  workers_used: string[]
+  total_latency_ms: number
+  success: boolean
+  created_at: string
+  reply_preview: string
+}
+
+export interface AgentTraceSpan {
+  id: string
+  orchestration_id: string
+  span_type: string
+  agent_name: string
+  parent_span_id: string | null
+  objective: string
+  input_summary: string
+  output_summary: string
+  latency_ms: number
+  success: boolean
+  error_message: string
+  metadata_json: string
+  created_at: string
+}
+
+export interface AgentMetricsItem {
+  date: string
+  agent_name: string
+  total_calls: number
+  success_count: number
+  error_count: number
+  avg_latency_ms: number
+  p50_latency_ms: number
+  p95_latency_ms: number
+  total_token_estimate: number
+}
+
+export function getTraces(params: {
+  limit?: number
+  agent_name?: string
+  date?: string
+  success?: string
+} = {}): Promise<OrchestrationSummary[]> {
+  const q = new URLSearchParams()
+  if (params.limit) q.set('limit', String(params.limit))
+  if (params.agent_name) q.set('agent_name', params.agent_name)
+  if (params.date) q.set('date', params.date)
+  if (params.success) q.set('success', params.success)
+  const qs = q.toString()
+  return get(`/agent/traces${qs ? '?' + qs : ''}`)
+}
+
+export function getTraceDetail(orchestrationId: string): Promise<AgentTraceSpan[]> {
+  return get(`/agent/traces/${orchestrationId}`)
+}
+
+export function getMetrics(params: {
+  days?: number
+  agent_name?: string
+} = {}): Promise<AgentMetricsItem[]> {
+  const q = new URLSearchParams()
+  if (params.days) q.set('days', String(params.days))
+  if (params.agent_name) q.set('agent_name', params.agent_name)
+  const qs = q.toString()
+  return get(`/agent/metrics${qs ? '?' + qs : ''}`)
+}

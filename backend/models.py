@@ -172,3 +172,39 @@ class GoalTask(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     goal = relationship("Goal", back_populates="tasks")
+
+
+class AgentTrace(Base):
+    """Agent 编排 Trace — 每次编排的完整调用链路"""
+    __tablename__ = "agent_traces"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    orchestration_id = Column(String(36), nullable=False, index=True)
+    span_type = Column(String(20), nullable=False)
+    agent_name = Column(String(30), nullable=False, default="orchestrator")
+    parent_span_id = Column(Integer, nullable=True)
+    objective = Column(String(200), default="")
+    input_summary = Column(String(500), default="")
+    output_summary = Column(String(500), default="")
+    latency_ms = Column(Integer, default=0)
+    success = Column(Boolean, default=True)
+    error_message = Column(String(300), default="")
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentMetrics(Base):
+    """Agent 每日指标聚合"""
+    __tablename__ = "agent_metrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False)
+    agent_name = Column(String(30), nullable=False)
+    total_calls = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    error_count = Column(Integer, default=0)
+    avg_latency_ms = Column(Integer, default=0)
+    p50_latency_ms = Column(Integer, default=0)
+    p95_latency_ms = Column(Integer, default=0)
+    total_token_estimate = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)

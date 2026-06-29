@@ -69,6 +69,11 @@ class Orchestrator:
         t_start = time_module.time()
         chat_history = chat_history or []
 
+        # 初始化结构化 Trace
+        from backend.agent.observability.tracer import get_tracer
+        tracer = get_tracer()
+        orch_id = tracer.start_orchestration(user_message[:200])
+
         # Step 1: 意图分析 + 任务分解
         t_plan_start = time_module.time()
         plan = await self._plan(user_message, chat_history)
@@ -79,12 +84,24 @@ class Orchestrator:
 
         logger.info(f"Orchestrator plan: intent={intent}, subtasks={len(subtasks)}")
 
+        # Trace: plan span
+        tracer.record_span(
+            orchestration_id=orch_id, span_type="plan",
+            agent_name="orchestrator", objective=intent,
+            input_summary=user_message[:300],
+            output_summary=json.dumps({"intent": intent, "subtask_count": len(subtasks)}, ensure_ascii=False)[:500],
+            latency_ms=plan_elapsed_ms, success=True,
+        )
+
         # Step 2: 如果没有子任务 → 直接 LLM 回复
         if not subtasks:
             reply = await self._direct_reply(user_message, chat_history)
-            self._log_plan(plan, plan_elapsed_ms, [], [],
-                           round((time_module.time() - t_start) * 1000),
-                           user_message, reply)
+            total_ms = round((time_module.time() - t_start) * 1000)
+            tracer.record_span(orchestration_id=orch_id, span_type="synthesis",
+                agent_name="orchestrator", objective="direct_reply",
+                output_summary=reply[:300], latency_ms=0, success=True)
+            tracer.flush()
+            self._log_plan(plan, plan_elapsed_ms, [], [], total_ms, user_message, reply)
             return {"reply": reply, "workers_used": [], "plan": plan}
 
         # Step 3: 并行执行独立子任务
@@ -97,6 +114,17 @@ class Orchestrator:
             ms = round((time_module.time() - t0) * 1000)
             task["_elapsed_ms"] = ms
             task["_success"] = r.success
+            # Trace: worker_execute span
+            tracer.record_span(
+                orchestration_id=orch_id, span_type="worker_execute",
+                agent_name=task.get("id", "unknown"),
+                objective=task.get("objective", "")[:200],
+                input_summary=json.dumps({"task_id": task.get("id"), "constraints": task.get("constraints", [])}, ensure_ascii=False)[:500],
+                output_summary=r.content[:300],
+                latency_ms=ms, success=r.success,
+                error_message="" if r.success else r.content[:300],
+                metadata=json.dumps({"confidence": r.confidence, "sources": r.sources}, ensure_ascii=False),
+            )
             return r
 
         if parallel_tasks:
@@ -118,25 +146,35 @@ class Orchestrator:
             if dep_result and dep_result.success:
                 dep_task["context"] = (dep_task.get("context", "") +
                                        "\n" + dep_result.content)
-            t0 = time_module.time()
-            r = await self._execute_subtask(dep_task)
-            dep_task["_elapsed_ms"] = round((time_module.time() - t0) * 1000)
-            dep_task["_success"] = r.success
+            r = await _timed(dep_task)
             results.append(r)
 
         # Step 5: 整合所有结果
+        t_syn_start = time_module.time()
         synthesis = await self._synthesize(intent, user_message, results, reply_intro)
+        syn_elapsed_ms = round((time_module.time() - t_syn_start) * 1000)
+        tracer.record_span(orchestration_id=orch_id, span_type="synthesis",
+            agent_name="orchestrator", objective="synthesize",
+            output_summary=synthesis[:300], latency_ms=syn_elapsed_ms, success=True)
 
         # Step 5.5: MicroCompact
         self._micro_compact(results)
 
         # Step 6: 沉淀到记忆层
+        t_persist_start = time_module.time()
         await self._persist_to_memory(intent, user_message, results, synthesis)
+        persist_elapsed_ms = round((time_module.time() - t_persist_start) * 1000)
+        tracer.record_span(orchestration_id=orch_id, span_type="persist",
+            agent_name="orchestrator", objective="persist_to_memory",
+            latency_ms=persist_elapsed_ms, success=True)
 
         # Step 7: 路由可观测性日志
         total_elapsed_ms = round((time_module.time() - t_start) * 1000)
         self._log_plan(plan, plan_elapsed_ms, parallel_tasks, dependent_tasks,
                        total_elapsed_ms, user_message, synthesis)
+
+        # 写入所有结构化 Trace
+        tracer.flush()
 
         return {
             "reply": synthesis,

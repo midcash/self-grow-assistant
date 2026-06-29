@@ -5,6 +5,7 @@ import VoiceWave from './VoiceWave.vue'
 import PriorityList from './PriorityList.vue'
 import ActivityLog from './ActivityLog.vue'
 import KnowledgeBase from './KnowledgeBase.vue'
+import ObservePanel from './observe/ObservePanel.vue'
 
 const {
   isSpeaking, messages, emotionTag, priorityTasks, scheduleRunning, status,
@@ -12,7 +13,7 @@ const {
 } = useAgent()
 
 const inputText = ref('')
-const activeTab = ref<'chat' | 'tasks' | 'log' | 'kb'>('chat')
+const activeTab = ref<'chat' | 'tasks' | 'log' | 'kb' | 'observe'>('chat')
 const isEvaluating = ref(false)
 const chatContainer = ref<HTMLDivElement>()
 
@@ -83,6 +84,7 @@ async function handleQuickAction(action: typeof quickActions[0]) {
       </button>
       <button class="tab-btn" :class="{ active: activeTab === 'log' }" @click="activeTab = 'log'">日志</button>
       <button class="tab-btn" :class="{ active: activeTab === 'kb' }" @click="activeTab = 'kb'">知识库</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'observe' }" @click="activeTab = 'observe'">观测</button>
     </div>
 
     <!-- Chat -->
@@ -123,6 +125,11 @@ async function handleQuickAction(action: typeof quickActions[0]) {
     <!-- Knowledge Base -->
     <div v-show="activeTab === 'kb'" class="tab-area">
       <KnowledgeBase />
+    </div>
+
+    <!-- Observe / Agent 数据流观测 -->
+    <div v-show="activeTab === 'observe'" class="tab-area observe-tab">
+      <ObservePanel />
     </div>
 
     <!-- Footer -->
@@ -231,6 +238,7 @@ async function handleQuickAction(action: typeof quickActions[0]) {
 /* Tasks */
 .tasks-area { flex: 1; padding: 0 16px; overflow-y: auto; min-height: 0; }
 .tab-area { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+.observe-tab { overflow: hidden; }
 
 /* Footer */
 .panel-footer { padding: 10px 16px; border-top: 1px solid var(--color-border); flex-shrink: 0; }

@@ -11,6 +11,7 @@
 | 5 | `mcp-integration-analysis.md` | 🟡 实验 | MCP 外部服务集成（Searcher 侧已通） |
 | 6 | `secretary-agent-upgrade.md` | 🟡 实验 | 秘书级升级（Goal/Coach/MotivationEngine） |
 | 7 | `goal-achievement-level3-spec.md` | 🔴 草稿 | Level3 长期目标达成闭环升级规格 |
+| 8 | `agent-observability-ui-design.md` | 🔴 草稿 | Agent 数据流观测页面设计 (Observe Tab) |
 
 ## 架构成熟度总览
 
