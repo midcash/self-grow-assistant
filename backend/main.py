@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from backend.database import engine, Base
-from backend.routers import qualities, todos, progress, reports, role_models, dashboard_bg, agent
+from backend.routers import qualities, todos, progress, reports, role_models, dashboard_bg, agent, evaluation
 from backend.utils import get_static_dir, get_data_dir
 from backend.agent.config import ConfigLoader
 
@@ -285,6 +285,7 @@ app.include_router(reports.router)
 app.include_router(role_models.router)
 app.include_router(dashboard_bg.router)
 app.include_router(agent.router)
+app.include_router(evaluation.router)
 
 
 @app.get("/api/health")

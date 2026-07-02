@@ -193,3 +193,100 @@ export function getMetrics(params: {
   const qs = q.toString()
   return get(`/agent/metrics${qs ? '?' + qs : ''}`)
 }
+
+// === Agent Evaluation API ===
+
+export interface EvalRunRequest {
+  name?: string
+  components?: string[]
+  workers?: string[]
+  tags?: string[]
+  gates?: string[]
+}
+
+export interface EvalRunSummary {
+  id: number
+  eval_name: string
+  passed: boolean
+  score: number
+  duration_ms: number
+  created_at: string
+}
+
+export interface EvalRunDetail {
+  run: {
+    id: number
+    eval_name: string
+    passed: boolean
+    score: number
+    metrics: Record<string, number>
+    summary: Record<string, { total: number; passed: number; failed: number; avg_score: number }>
+    failure_reason: string
+    duration_ms: number
+    created_at: string
+  }
+  results: EvalResultItem[]
+}
+
+export interface EvalResultItem {
+  id: number
+  example_id: string
+  worker: string
+  eval_type: string
+  score: number
+  passed: boolean
+  dimension_scores: Record<string, number>
+  reasoning: string
+}
+
+export interface EvalDatasetInfo {
+  name: string
+  description: string
+  example_count: number
+  workers: string[]
+}
+
+export interface EvalSummary {
+  last_run: EvalRunSummary | null
+  recent: { date: string; score: number; passed: boolean }[]
+}
+
+export function runEvaluation(params: EvalRunRequest = {}): Promise<EvalReportData> {
+  return post('/agent/evaluation/run', params)
+}
+
+export interface EvalReportData {
+  run_id: string
+  config: any
+  summary: Record<string, { total: number; passed: number; failed: number; avg_score: number; min_score: number; max_score: number }>
+  dimension_scores: Record<string, number>
+  passed: boolean
+  total_duration_ms: number
+  results: any[]
+}
+
+export function getEvaluationRuns(params: {
+  limit?: number
+  passed?: string
+  name?: string
+} = {}): Promise<EvalRunSummary[]> {
+  const q = new URLSearchParams()
+  if (params.limit) q.set('limit', String(params.limit))
+  if (params.passed) q.set('passed', params.passed)
+  if (params.name) q.set('name', params.name)
+  const qs = q.toString()
+  return get(`/agent/evaluation/runs${qs ? '?' + qs : ''}`)
+}
+
+export function getEvaluationRunDetail(runId: number): Promise<EvalRunDetail> {
+  return get(`/agent/evaluation/runs/${runId}`)
+}
+
+export function getEvaluationDatasets(worker?: string): Promise<EvalDatasetInfo[]> {
+  const q = worker ? `?worker=${encodeURIComponent(worker)}` : ''
+  return get(`/agent/evaluation/datasets${q}`)
+}
+
+export function getEvaluationSummary(): Promise<EvalSummary> {
+  return get('/agent/evaluation/summary')
+}

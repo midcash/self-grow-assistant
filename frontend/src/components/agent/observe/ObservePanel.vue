@@ -15,6 +15,7 @@ import AgentTopology from './AgentTopology.vue'
 import MetricsDashboard from './MetricsDashboard.vue'
 import SSEMonitor from './SSEMonitor.vue'
 import MetricsStickyBar from './MetricsStickyBar.vue'
+import EvaluationPanel from './EvaluationPanel.vue'
 
 const {
   orchestrations, currentTraceSpans, metrics, filter, selectedOrchestrationId,
@@ -55,17 +56,23 @@ onUnmounted(() => stopAutoRefresh())
 
     <!-- 右侧: 详情 -->
     <main class="detail-panel">
-      <template v-if="selectedOrchestrationId">
-        <div class="detail-tabs">
-          <button
-            v-for="t in [{k:'waterfall',l:'瀑布图'},{k:'topology',l:'拓扑'},{k:'metrics',l:'指标'}]"
-            :key="t.k"
-            class="detail-tab-btn"
-            :class="{ active: detailTab === t.k }"
-            @click="detailTab = t.k"
-          >{{ t.l }}</button>
-          <span class="detail-orch-id">#{{ selectedOrchestrationId?.slice(0, 8) }}</span>
-        </div>
+      <!-- Tabs: always visible -->
+      <div class="detail-tabs">
+        <button
+          v-for="t in [{k:'waterfall',l:'瀑布图'},{k:'topology',l:'拓扑'},{k:'metrics',l:'指标'},{k:'evaluation',l:'评估'}]"
+          :key="t.k"
+          class="detail-tab-btn"
+          :class="{ active: detailTab === t.k }"
+          @click="detailTab = t.k"
+        >{{ t.l }}</button>
+        <span v-if="selectedOrchestrationId" class="detail-orch-id">#{{ selectedOrchestrationId?.slice(0, 8) }}</span>
+      </div>
+
+      <!-- Evaluation tab: works without orchestration selection -->
+      <EvaluationPanel v-if="detailTab === 'evaluation'" />
+
+      <!-- Other tabs: require orchestration selection -->
+      <template v-else-if="selectedOrchestrationId">
         <TraceWaterfall
           v-if="detailTab === 'waterfall'"
           :spans="currentTraceSpans"
@@ -74,6 +81,7 @@ onUnmounted(() => stopAutoRefresh())
         <AgentTopology v-else-if="detailTab === 'topology'" :metrics="metrics" />
         <MetricsDashboard v-else-if="detailTab === 'metrics'" :metrics="metrics" />
       </template>
+
       <div v-else class="empty-detail">
         <span class="empty-icon">◷</span>
         <p>从左侧列表选择一个编排查看详情</p>

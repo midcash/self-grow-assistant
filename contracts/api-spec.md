@@ -346,6 +346,128 @@ Response: {
 
 ---
 
+## 7. Agent评估 APIs
+
+> 成熟度: 🔴 草案 — Phase 0 合约先行。
+
+### 7.1 触发评估运行
+```
+POST /api/v1/agent/evaluation/run
+Body: {
+  "name": "manual",                     // 运行名称
+  "components": ["prompt", "tool_call", // 评估组件(可选,默认全部)
+                  "reasoning", "rag"],
+  "workers": ["searcher", "profiler"],  // 目标Worker(可选,默认全部)
+  "tags": ["smoke"],                    // 过滤标签(可选)
+  "gates": ["smoke"]                    // 闸门检查(可选)
+}
+Response: {
+  "code": 0,
+  "data": {
+    "run_id": "eval-abc123",
+    "config": {...},
+    "summary": {
+      "prompt": {"pass": 5, "fail": 0, "avg_score": 4.2},
+      "tool_call": {"pass": 4, "fail": 1, "avg_score": 3.8}
+    },
+    "dimension_scores": {"prompt": 4.2, "rag": 3.9, ...},
+    "passed": true,
+    "total_duration_ms": 45230
+  }
+}
+```
+
+### 7.2 获取评估运行列表
+```
+GET /api/v1/agent/evaluation/runs?limit=10&passed=true&name=smoke
+Response: {
+  "code": 0,
+  "data": [
+    {
+      "id": 1,
+      "eval_name": "smoke",
+      "passed": true,
+      "score": 4.1,
+      "duration_ms": 45230,
+      "created_at": "2026-07-02T15:30:00"
+    }
+  ]
+}
+```
+
+### 7.3 获取评估运行详情
+```
+GET /api/v1/agent/evaluation/runs/{run_id}
+Response: {
+  "code": 0,
+  "data": {
+    "run": {
+      "id": 1,
+      "eval_name": "smoke",
+      "passed": true,
+      "score": 4.1,
+      "metrics": {"prompt": 4.2, "tool_call": 3.8},
+      "summary": {...},
+      "failure_reason": "",
+      "duration_ms": 45230,
+      "created_at": "2026-07-02T15:30:00"
+    },
+    "results": [
+      {
+        "id": 1,
+        "example_id": "searcher-prompt-1",
+        "worker": "searcher",
+        "eval_type": "prompt",
+        "score": 4.5,
+        "passed": true,
+        "dimension_scores": {"clarity": 5, "actionability": 4},
+        "reasoning": "提示词清晰定义了搜索步骤...",
+        "latency_ms": 1200
+      }
+    ]
+  }
+}
+```
+
+### 7.4 获取评估数据集列表
+```
+GET /api/v1/agent/evaluation/datasets?worker=searcher
+Response: {
+  "code": 0,
+  "data": [
+    {
+      "name": "searcher-prompt",
+      "description": "SearcherWorker系统提示词质量评估",
+      "example_count": 6,
+      "workers": ["searcher"]
+    }
+  ]
+}
+```
+
+### 7.5 获取评估摘要
+```
+GET /api/v1/agent/evaluation/summary
+Response: {
+  "code": 0,
+  "data": {
+    "last_run": {
+      "id": 10,
+      "eval_name": "release",
+      "passed": true,
+      "score": 4.2,
+      "created_at": "2026-07-02T15:30:00"
+    },
+    "recent": [
+      {"date": "2026-07-02", "score": 4.2, "passed": true},
+      {"date": "2026-07-01", "score": 3.8, "passed": false}
+    ]
+  }
+}
+```
+
+---
+
 ## 错误码定义
 
 | code | 说明 |

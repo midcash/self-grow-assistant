@@ -208,3 +208,36 @@ class AgentMetrics(Base):
     p95_latency_ms = Column(Integer, default=0)
     total_token_estimate = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentEvaluationRun(Base):
+    """Agent评估运行记录 — 一次完整的评估流水线运行"""
+    __tablename__ = "agent_evaluation_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eval_name = Column(String(100), nullable=False)
+    config_json = Column(Text, default="{}")
+    passed = Column(Boolean, default=False)
+    score = Column(Float, default=0.0)
+    metrics_json = Column(Text, default="{}")
+    summary_json = Column(Text, default="{}")
+    failure_reason = Column(String(500), default="")
+    duration_ms = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentEvaluationResult(Base):
+    """评估结果明细 — 每次评估运行中的单个用例结果"""
+    __tablename__ = "agent_evaluation_results"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("agent_evaluation_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    example_id = Column(String(50), nullable=False)
+    worker = Column(String(30), nullable=False)
+    eval_type = Column(String(20), nullable=False)
+    score = Column(Float, default=0.0)
+    passed = Column(Boolean, default=False)
+    dimension_scores_json = Column(Text, default="{}")
+    reasoning = Column(String(500), default="")
+    latency_ms = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
