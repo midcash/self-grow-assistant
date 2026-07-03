@@ -12,6 +12,7 @@
 | 6 | `secretary-agent-upgrade.md` | 🟡 实验 | 秘书级升级（Goal/Coach/MotivationEngine） |
 | 7 | `goal-achievement-level3-spec.md` | 🔴 草稿 | Level3 长期目标达成闭环升级规格 |
 | 8 | `agent-observability-ui-design.md` | 🔴 草稿 | Agent 数据流观测页面设计 (Observe Tab) |
+| 9 | `skill-learning-transformation-plan.md` | 🔴 草稿 | 技能学习追踪器改造计划（新项目 vs 改造 + 清理 + 重构） |
 
 ## 架构成熟度总览
 

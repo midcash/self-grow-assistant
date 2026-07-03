@@ -241,3 +241,68 @@ class AgentEvaluationResult(Base):
     reasoning = Column(String(500), default="")
     latency_ms = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+# ═══ 在线监控表 (可观测性增强) ═══
+
+class AgentQualitySample(Base):
+    """Agent质量抽样 — 对生产聊天的周期性质量评分"""
+    __tablename__ = "agent_quality_samples"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    orchestration_id = Column(String(36), nullable=False, index=True)
+    user_message = Column(String(500), default="")
+    agent_reply = Column(String(1000), default="")
+    workers_used = Column(String(100), default="")
+    quality_score = Column(Float, default=0.0)    # LLM-as-Judge 总分 0-5
+    quality_dims_json = Column(Text, default="{}") # {"relevance":4,"coherence":3,...}
+    quality_reasoning = Column(String(500), default="")
+    sampling_rate = Column(Integer, default=10)    # 采样率 1/N
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentBaseline(Base):
+    """Agent监控基线 — 历史正常行为的统计数据"""
+    __tablename__ = "agent_baselines"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    metric_name = Column(String(50), nullable=False)    # success_rate / avg_latency / quality_score / ...
+    agent_name = Column(String(30), default="all")       # 按 Worker 或全局
+    baseline_value = Column(Float, nullable=False)       # 基线值 (7天均值)
+    std_dev = Column(Float, default=0.0)                 # 标准差
+    sample_count = Column(Integer, default=0)            # 样本数
+    p50_value = Column(Float, default=0.0)
+    p95_value = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentAnomaly(Base):
+    """Agent异常记录 — 偏离基线的异常事件"""
+    __tablename__ = "agent_anomalies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anomaly_type = Column(String(30), nullable=False)     # latency_spike / quality_drop / error_surge / safety_violation
+    severity = Column(String(10), default="warning")      # info / warning / critical
+    metric_name = Column(String(50), default="")
+    current_value = Column(Float, default=0.0)
+    baseline_value = Column(Float, default=0.0)
+    deviation_pct = Column(Float, default=0.0)            # 偏离百分比
+    context_json = Column(Text, default="{}")             # 触发上下文
+    acknowledged = Column(Boolean, default=False)         # 是否已确认
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentSafetyLog(Base):
+    """Agent安全日志 — 合规扫描结果"""
+    __tablename__ = "agent_safety_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    orchestration_id = Column(String(36), nullable=False, index=True)
+    user_message = Column(String(500), default="")
+    agent_reply = Column(String(1000), default="")
+    safety_score = Column(Integer, default=100)           # 0-100, 100=完全安全
+    flags_json = Column(Text, default="[]")               # [{"rule":"jailbreak","severity":"high","match":"..."}]
+    jailbreak_attempt = Column(Boolean, default=False)
+    pii_detected = Column(Boolean, default=False)
+    harmful_content = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

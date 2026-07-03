@@ -10,6 +10,7 @@ import ObservePanel from './observe/ObservePanel.vue'
 const {
   isSpeaking, messages, emotionTag, priorityTasks, scheduleRunning, status,
   sendMessage, speak, evaluate, toggleScheduleRun,
+  monitorSummary,
 } = useAgent()
 
 const inputText = ref('')
@@ -96,6 +97,21 @@ async function handleQuickAction(action: typeof quickActions[0]) {
         </div>
         <div v-for="(msg, idx) in messages" :key="idx" class="chat-bubble" :class="msg.role">
           <div class="bubble-content">{{ msg.content }}</div>
+          <div v-if="msg.role === 'agent' && msg.monitoring" class="monitor-indicator">
+            <span v-if="msg.monitoring.safety" class="monitor-chip"
+              :class="msg.monitoring.safety.safety_score >= 90 ? 'safe' : 'warn'"
+              :title="'Safety: ' + msg.monitoring.safety.safety_score + '/100'">
+              S{{ msg.monitoring.safety.safety_score }}
+            </span>
+            <span v-if="msg.monitoring.quality" class="monitor-chip"
+              :class="msg.monitoring.quality.quality_score >= 3.5 ? 'ok' : 'low'"
+              :title="'Quality: ' + msg.monitoring.quality.quality_score.toFixed(1) + '/5'">
+              Q{{ msg.monitoring.quality.quality_score.toFixed(1) }}
+            </span>
+            <span class="monitor-chip token" :title="'Tokens: ~' + msg.monitoring.tokens_estimated + ' | Cost: $' + msg.monitoring.cost_estimated.toFixed(6)">
+              ~{{ msg.monitoring.tokens_estimated }}t
+            </span>
+          </div>
         </div>
       </div>
       <div class="quick-actions">
@@ -134,6 +150,11 @@ async function handleQuickAction(action: typeof quickActions[0]) {
 
     <!-- Footer -->
     <div class="panel-footer">
+      <div v-if="monitorSummary.total_checks > 0" class="monitor-summary">
+        <span class="ms-item">T: {{ monitorSummary.total_tokens }}</span>
+        <span class="ms-item">${{ monitorSummary.total_cost.toFixed(4) }}</span>
+        <span v-if="monitorSummary.safety_violations > 0" class="ms-item warn">{{ monitorSummary.safety_violations }}warn</span>
+      </div>
       <button class="footer-btn" :class="{ active: scheduleRunning }" @click="toggleScheduleRun">
         <span class="footer-dot" :class="{ on: scheduleRunning }"></span>
         {{ scheduleRunning ? '20分钟监控中' : '监控已暂停' }}
@@ -251,4 +272,25 @@ async function handleQuickAction(action: typeof quickActions[0]) {
 .footer-btn.active { border-color: var(--color-success); color: var(--color-success); }
 .footer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-border); }
 .footer-dot.on { background: var(--color-success); }
+
+/* Monitoring indicators */
+.monitor-indicator {
+  display: flex; gap: 4px; margin-top: 4px; padding-left: 2px;
+}
+.monitor-chip {
+  font-size: 9px; padding: 1px 5px; border-radius: 8px;
+  background: #f0f0f0; color: var(--color-text-muted);
+  font-family: monospace;
+}
+.monitor-chip.safe { background: #e8f5e9; color: #2e7d32; }
+.monitor-chip.warn { background: #fff3e0; color: #e65100; }
+.monitor-chip.ok { background: #e3f2fd; color: #1565c0; }
+.monitor-chip.low { background: #ffebee; color: #c62828; }
+.monitor-chip.token { font-size: 8px; opacity: 0.7; }
+.monitor-summary {
+  display: flex; gap: 8px; padding: 2px 0 6px; font-size: 10px;
+  color: var(--color-text-muted); align-items: center;
+}
+.ms-item { font-family: monospace; }
+.ms-item.warn { color: #e65100; font-weight: 600; }
 </style>

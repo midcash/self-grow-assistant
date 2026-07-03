@@ -21,8 +21,17 @@ const isListening = ref(false)
 const status = ref<AgentStatus>({ initialized: false })
 const priorityTasks = ref<PriorityTask[]>([])
 const scheduleRunning = ref(false)
-const messages = ref<{ role: string; content: string }[]>([])
+const messages = ref<{ role: string; content: string; monitoring?: OrchestrateResult['monitoring'] }[]>([])
 const emotionTag = ref('CALM')
+
+// 监控累积摘要(所有对话的聚合)
+const monitorSummary = ref({
+  total_checks: 0,
+  safety_violations: 0,
+  avg_quality: 0 as number | null,
+  total_tokens: 0,
+  total_cost: 0,
+})
 const unreadAlerts = ref(0)
 
 export function useAgent() {
@@ -45,8 +54,30 @@ export function useAgent() {
 
       if (shouldOrchestrate) {
         const result = await orchestrate(text, history)
-        messages.value.push({ role: 'agent', content: result.reply })
+        messages.value.push({
+          role: 'agent',
+          content: result.reply,
+          monitoring: result.monitoring,  // 记录每条对话的监控结果
+        })
         emotionTag.value = 'THINKING'
+
+        // 累积监控摘要
+        if (result.monitoring) {
+          monitorSummary.value.total_checks++
+          if (result.monitoring.safety?.safety_score && result.monitoring.safety.safety_score < 100) {
+            monitorSummary.value.safety_violations++
+          }
+          if (result.monitoring.quality) {
+            const prev = monitorSummary.value.avg_quality
+            const n = monitorSummary.value.total_checks
+            monitorSummary.value.avg_quality = prev !== null
+              ? round((prev * (n - 1) + result.monitoring.quality.quality_score) / n, 1)
+              : result.monitoring.quality.quality_score
+          }
+          monitorSummary.value.total_tokens += result.monitoring.tokens_estimated || 0
+          monitorSummary.value.total_cost += result.monitoring.cost_estimated || 0
+        }
+
         return { reply: result.reply, emotion_tag: 'THINKING' }
       } else {
         const resp = await agentChat(text, history)
@@ -165,6 +196,7 @@ export function useAgent() {
     emotionTag,
     unreadAlerts,
     hasAlerts,
+    monitorSummary,
     // audio ref (for Live2D timeupdate sync)
     currentAudio,
     // actions
@@ -178,4 +210,9 @@ export function useAgent() {
     togglePanel,
     init,
   }
+}
+
+function round(val: number, decimals: number): number {
+  const factor = 10 ** decimals
+  return Math.round(val * factor) / factor
 }

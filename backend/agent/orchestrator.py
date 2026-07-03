@@ -54,6 +54,19 @@ class Orchestrator:
         self._llm = llm_plugin
         self._workers: dict[str, Any] = {}
 
+        # 在线监控钩子(延迟初始化)
+        self._safety_scanner = None
+        self._quality_sampler = None
+
+    def _ensure_monitors(self):
+        """延迟初始化监控组件(需要LLM就绪后)"""
+        if self._safety_scanner is None:
+            from backend.agent.observability.safety import SafetyScanner
+            self._safety_scanner = SafetyScanner()
+        if self._quality_sampler is None:
+            from backend.agent.observability.quality_sampler import QualitySampler
+            self._quality_sampler = QualitySampler(self._llm, sampling_rate=10)
+
     async def warmup(self) -> None:
         """初始化所有 Worker（注入 LLM）"""
         for name, cls in WORKER_REGISTRY.items():
@@ -160,6 +173,49 @@ class Orchestrator:
         # Step 5.5: MicroCompact
         self._micro_compact(results)
 
+        # Step 5.6: 在线监控 — 安全扫描 + 质量抽样
+        self._ensure_monitors()
+
+        # 安全扫描(同步, 规则匹配, 耗时<1ms)
+        workers_used_names = [r.task_id for r in results if r.success]
+        safety_result = None
+        try:
+            safety_result = self._safety_scanner.scan(
+                orchestration_id=orch_id,
+                user_message=user_message,
+                agent_reply=synthesis,
+            )
+        except Exception as e:
+            logger.warning(f"Safety scan failed: {e}")
+
+        # 质量抽样(异步触发, 命中采样率才评分)
+        quality_result = None
+        try:
+            quality_result = await self._quality_sampler.maybe_sample(
+                orchestration_id=orch_id,
+                user_message=user_message,
+                agent_reply=synthesis,
+                workers_used=workers_used_names,
+            )
+        except Exception as e:
+            logger.warning(f"Quality sampling failed: {e}")
+
+        # Token估算(字符数/2.5 ≈ 中文token, /4 ≈ 英文token)
+        total_chars = len(user_message) + len(synthesis)
+        estimated_tokens = max(1, int(total_chars / 3))
+        estimated_cost = round(estimated_tokens * 0.000002, 6)  # ~$2/M tokens
+
+        # 监控摘要写入synthesis span metadata
+        monitor_meta = {
+            "tokens_estimate": estimated_tokens,
+            "cost_estimate": estimated_cost,
+        }
+        if safety_result:
+            monitor_meta["safety_score"] = safety_result["safety_score"]
+            monitor_meta["safety_flags"] = len(safety_result["flags"])
+        if quality_result:
+            monitor_meta["quality_score"] = quality_result["quality_score"]
+
         # Step 6: 沉淀到记忆层
         t_persist_start = time_module.time()
         await self._persist_to_memory(intent, user_message, results, synthesis)
@@ -178,12 +234,18 @@ class Orchestrator:
 
         return {
             "reply": synthesis,
-            "workers_used": [r.task_id for r in results if r.success],
+            "workers_used": workers_used_names,
             "results": [
                 {"role": r.task_id, "success": r.success, "summary": r.content[:200]}
                 for r in results
             ],
             "plan": plan,
+            "monitoring": {
+                "safety": safety_result,
+                "quality": quality_result,
+                "tokens_estimated": estimated_tokens,
+                "cost_estimated": estimated_cost,
+            },
         }
 
     async def _persist_to_memory(self, intent: str, user_message: str,

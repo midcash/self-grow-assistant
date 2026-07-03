@@ -61,6 +61,12 @@ export interface OrchestrateResult {
   workers_used: string[]
   results: { role: string; success: boolean; summary: string }[]
   plan: { intent: string; subtasks: any[] }
+  monitoring?: {
+    safety?: { safety_score: number; flags: any[]; jailbreak_attempt: boolean; pii_detected: boolean; harmful_content: boolean } | null
+    quality?: { quality_score: number; dimensions: Record<string, number>; reasoning: string } | null
+    tokens_estimated: number
+    cost_estimated: number
+  }
 }
 
 export function orchestrate(message: string, history: { role: string; content: string }[] = []): Promise<OrchestrateResult> {

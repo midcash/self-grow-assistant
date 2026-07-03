@@ -81,8 +81,17 @@ class TraceCollector:
         success: bool = True,
         error_message: str = "",
         metadata: str = "{}",
+        tokens_used: int = 0,              # 新增: token追踪
+        cost_estimate: float = 0.0,        # 新增: 成本估算
     ) -> None:
         """记录一个 span（缓存，待 flush 写入数据库）"""
+        # 合并 tokens/cost 到 metadata
+        meta_dict = json.loads(metadata) if isinstance(metadata, str) else dict(metadata)
+        if tokens_used > 0:
+            meta_dict["tokens_used"] = tokens_used
+        if cost_estimate > 0:
+            meta_dict["cost_estimate"] = round(cost_estimate, 6)
+
         span = {
             "orchestration_id": orchestration_id,
             "span_type": span_type,
@@ -94,7 +103,7 @@ class TraceCollector:
             "latency_ms": latency_ms,
             "success": success,
             "error_message": error_message[:300],
-            "metadata_json": metadata if isinstance(metadata, str) else json.dumps(metadata, ensure_ascii=False),
+            "metadata_json": json.dumps(meta_dict, ensure_ascii=False),
         }
         self._pending_spans.append(span)
         logger.debug(f"TraceCollector: record {span_type}/{agent_name} ({latency_ms}ms)")

@@ -836,3 +836,163 @@ async def delete_goal(goal_id: int, db: Session = Depends(get_db)):
     db.delete(goal)
     db.commit()
     return ok({"deleted": True})
+
+
+# ═══ 在线监控 API ═══
+
+@router.get("/monitor/summary")
+async def get_monitor_summary():
+    """获取在线监控摘要: 4维度一览
+
+    Returns: 质量/异常/成本延迟/安全 四个维度的最近状态
+    """
+    from backend.database import SessionLocal
+    from backend.models import AgentMetrics, AgentAnomaly, AgentQualitySample, AgentSafetyLog
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    db = SessionLocal()
+    try:
+        today = date.today()
+
+        # 1. 质量: 最近质量抽样均值
+        quality_row = db.query(
+            func.count().label("cnt"),
+            func.avg(AgentQualitySample.quality_score).label("avg"),
+        ).filter(AgentQualitySample.created_at >= today).first()
+
+        # 2. 异常: 今日未确认的异常数
+        anomaly_count = db.query(func.count()).filter(
+            AgentAnomaly.created_at >= today,
+            AgentAnomaly.acknowledged == False,
+        ).scalar() or 0
+
+        # 3. 成本/延迟: 最近7天
+        since = today - timedelta(days=7)
+        metrics_rows = db.query(AgentMetrics).filter(
+            AgentMetrics.date >= since
+        ).all()
+
+        total_tokens = sum(r.total_token_estimate for r in metrics_rows)
+        total_calls = sum(r.total_calls for r in metrics_rows)
+        avg_lat = int(sum(r.avg_latency_ms for r in metrics_rows if r.avg_latency_ms) / max(len([r for r in metrics_rows if r.avg_latency_ms]), 1))
+        estimated_cost = round(total_tokens * 0.000002, 4)  # ~$2/M tokens
+
+        # 4. 安全: 今日安全分均值 + 违规数
+        safety_row = db.query(
+            func.count().label("cnt"),
+            func.avg(AgentSafetyLog.safety_score).label("avg"),
+            func.sum(func.case((AgentSafetyLog.jailbreak_attempt == True, 1), else_=0)).label("jailbreaks"),
+            func.sum(func.case((AgentSafetyLog.harmful_content == True, 1), else_=0)).label("harmful"),
+        ).filter(AgentSafetyLog.created_at >= today).first()
+
+        return ok({
+            "quality": {
+                "recent_samples": quality_row.cnt or 0,
+                "avg_score": round(quality_row.avg or 0, 1),
+                "status": "healthy" if (quality_row.avg or 5) >= 3.5 else "degraded",
+            },
+            "anomalies": {
+                "today_count": anomaly_count,
+                "status": "clear" if anomaly_count == 0 else "alert",
+            },
+            "cost_efficiency": {
+                "7d_total_calls": total_calls,
+                "7d_total_tokens": total_tokens,
+                "7d_estimated_cost_usd": estimated_cost,
+                "7d_avg_latency_ms": avg_lat,
+                "status": "normal" if avg_lat < 5000 else "slow",
+            },
+            "safety": {
+                "today_scans": safety_row.cnt or 0,
+                "avg_score": round(safety_row.avg or 100, 0),
+                "jailbreak_attempts": safety_row.jailbreaks or 0,
+                "harmful_detections": safety_row.harmful or 0,
+                "status": "safe" if (safety_row.avg or 100) >= 90 else "warning",
+            },
+        })
+    finally:
+        db.close()
+
+
+@router.get("/monitor/anomalies")
+async def get_anomalies(limit: int = 20):
+    """获取最近的异常事件列表"""
+    from backend.agent.observability.monitor import Monitor
+    monitor = Monitor()
+    return ok(monitor.get_recent_anomalies(limit=limit))
+
+
+@router.get("/monitor/quality-trend")
+async def get_quality_trend(days: int = 7):
+    """获取质量趋势数据"""
+    from backend.database import SessionLocal
+    from backend.models import AgentQualitySample
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    db = SessionLocal()
+    try:
+        since = date.today() - timedelta(days=days)
+        rows = db.query(
+            func.date(AgentQualitySample.created_at).label("d"),
+            func.count().label("cnt"),
+            func.avg(AgentQualitySample.quality_score).label("avg"),
+        ).filter(AgentQualitySample.created_at >= since).group_by("d").order_by("d").all()
+
+        return ok([{
+            "date": r.d.isoformat() if r.d else "",
+            "sample_count": r.cnt,
+            "avg_score": round(r.avg or 0, 1),
+        } for r in rows])
+    finally:
+        db.close()
+
+
+@router.get("/monitor/safety-log")
+async def get_safety_log(limit: int = 20, severity: str = ""):
+    """获取安全日志列表"""
+    from backend.database import SessionLocal
+    from backend.models import AgentSafetyLog
+
+    db = SessionLocal()
+    try:
+        q = db.query(AgentSafetyLog)
+        if severity == "flagged":
+            q = q.filter(AgentSafetyLog.safety_score < 100)
+        rows = q.order_by(AgentSafetyLog.created_at.desc()).limit(limit).all()
+
+        return ok([{
+            "id": r.id,
+            "orchestration_id": r.orchestration_id,
+            "safety_score": r.safety_score,
+            "jailbreak_attempt": r.jailbreak_attempt,
+            "pii_detected": r.pii_detected,
+            "harmful_content": r.harmful_content,
+            "user_message_preview": r.user_message[:100],
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        } for r in rows])
+    finally:
+        db.close()
+
+
+@router.post("/monitor/rebuild-baseline")
+async def rebuild_monitor_baseline():
+    """手动重建监控基线"""
+    from backend.agent.observability.monitor import Monitor
+    monitor = Monitor()
+    result = monitor.rebuild_baseline()
+    return ok({"rebuilt": len(result), "agents": list(result.keys())})
+
+
+@router.post("/monitor/check")
+async def trigger_monitor_check():
+    """手动触发基线异常检查"""
+    from backend.agent.observability.monitor import Monitor
+    from datetime import date
+    monitor = Monitor()
+    anomalies = monitor.check_baseline(date.today())
+    return ok({
+        "anomalies_found": len(anomalies),
+        "anomalies": anomalies,
+    })

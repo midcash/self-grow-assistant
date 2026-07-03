@@ -1,5 +1,6 @@
 """MetricsAggregator — Agent 每日指标聚合"""
 
+import json as _json
 import logging
 from datetime import date, timedelta
 from typing import Any
@@ -67,6 +68,23 @@ class MetricsAggregator:
                         AgentMetrics.agent_name == row.agent_name,
                     ).delete()
 
+                    # 从metadata_json计算今日token/cost
+                    import json as _json
+                    token_rows = db.query(AgentTrace.metadata_json).filter(
+                        AgentTrace.agent_name == row.agent_name,
+                        AgentTrace.created_at >= day_start,
+                        AgentTrace.created_at < day_end,
+                    ).all()
+                    total_tokens = 0
+                    total_cost = 0.0
+                    for tr in token_rows:
+                        try:
+                            meta = _json.loads(tr[0] or "{}")
+                            total_tokens += meta.get("tokens_estimate", 0)
+                            total_cost += meta.get("cost_estimate", 0)
+                        except Exception:
+                            pass
+
                     db.add(AgentMetrics(
                         date=target_date,
                         agent_name=row.agent_name,
@@ -76,7 +94,7 @@ class MetricsAggregator:
                         avg_latency_ms=int(row.avg_ms or 0),
                         p50_latency_ms=p50,
                         p95_latency_ms=p95,
-                        total_token_estimate=0,
+                        total_token_estimate=total_tokens,
                     ))
                     result[row.agent_name] = 1
 
